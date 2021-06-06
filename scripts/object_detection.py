@@ -72,7 +72,21 @@ def main():
     
     # Prompt the user for information
     file_query = input('Filename of the query image: ')
+
+    query = cv.imread(f'images/{file_query}')
+
+    if query is None:
+        print(f'Failed to find \'{file_query}\'.')
+        exit(1)
+    
     file_train = input('Filename of the train image: ')
+
+    train = cv.imread(f'images/{file_train}')
+    
+    if train is None:
+        print(f'Failed to find \'{file_train}\'.')
+        exit(1)
+
     count = 0
     for k in range(len(class_names)-1):
         print(f"{class_names[k]}, ", end="")
@@ -101,14 +115,16 @@ def main():
     rcnn.load_weights('mask_rcnn_coco.h5', by_name=True)
     # load photograph
     img = load_img(f'images/{file_train}')
+
+    if img is None:
+        print(f'Failed to find \'{file_train}\'.')
+        exit(1)
+
     img = img_to_array(img)
     # make prediction
     results = rcnn.detect([img], verbose=0)
     # get dictionary for first prediction
     r = results[0]
-
-    query = cv.imread(f'images/{file_query}')
-    train = cv.imread(f'images/{file_train}')
 
     locator = Locator()
      
