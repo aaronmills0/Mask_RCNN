@@ -8,42 +8,91 @@ import numpy as np
 from locate_object import Locator
 import matplotlib.pyplot as plt
 
+def resize(img):
+    ratio = img.shape[1]/img.shape[0]
+
+    dim = (int(ratio*600), 600)
+
+    img = cv.resize(img, dim, interpolation=cv.INTER_AREA)
+
+    return img
+
 def apply_mask(img, mask):
     blank = np.copy(img)
     for c in range(3):
         blank[:,:,c] = np.where(mask==1, 255, 0)
     return blank
 
-def is_object(query, train, roi, num=10, thresh=40, orb=None, bf=None):
-     img = train[roi[0]:roi[2], roi[1]:roi[3]]
-     if orb == None:
-          orb = cv.ORB_create()
+def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=None, bf=None):
+    img = train[roi[0]:roi[2], roi[1]:roi[3]]
+    if orb == None:
+        orb = cv.ORB_create()
      
-     kp1, des1 = orb.detectAndCompute(query, None)
-     kp2, des2 = orb.detectAndCompute(img, None)
+    kp1, des1 = orb.detectAndCompute(query, None)
+    kp2, des2 = orb.detectAndCompute(img, None)
 
-     if bf == None:
-          bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+    if bf == None:
+        bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
      
-     matches = bf.match(des1, des2)
+    matches = bf.match(des1, des2)
 
-     matches = sorted(matches, key = lambda x:x.distance)
+    matches = sorted(matches, key = lambda x:x.distance)
 
-     print("===============================")
-     for i in range(len(matches)):
-          print(f"{matches[i].distance} ", end="")
-     print("\n===============================")
+    print("===============================")
+    for i in range(len(matches)):
+        print(f"{matches[i].distance} ", end="")
+    print("\n===============================")
      
-     s = 0
-     for j in matches[:num]:
-          s += j.distance
+    s = 0
+    for j in matches[:num]:
+        s += j.distance
 
-     s = s/num
+    s = s/num
 
-     if s <= thresh:
-          return True
+    if s <= thresh:
+        blank = np.copy(train)
+        b_vals = []
+        g_vals = []
+        r_vals = []
+        blank = np.where(masked>0, blank, 0)
+    
+        cv.imshow('blank', blank)
 
-     return False
+        cv.waitKey(0)
+
+        for i in range(blank.shape[0]):
+            for j in range(blank.shape[1]):
+                if blank[i,j].any() > 0:
+                    b_vals.append(blank[i,j,0])
+                    g_vals.append(blank[i,j,1])
+                    r_vals.append(blank[i,j,2])
+
+        b_vals = sorted(b_vals)
+        g_vals = sorted(g_vals)
+        r_vals = sorted(r_vals)
+
+        b_med = b_vals[int(len(b_vals)//2)]
+        g_med = g_vals[int(len(g_vals)//2)]
+        r_med = r_vals[int(len(r_vals)//2)]
+
+        # Perform BM-Transform
+
+        diff = query_med[0]-b_med
+
+        b_med += int(diff)
+
+        g_med += int(diff)
+
+        r_med +=  int(diff)
+
+        print(f"Train -> Blue: {b_med}, Green: {g_med}, Red: {r_med}")
+
+        if not ((abs(int(query_med[1])-int(g_med)) < deviation and abs(int(query_med[2])-int(r_med)) < deviation)):
+            return False
+
+        return True
+
+    return False
      
 def main():
     # define 81 classes that the coco model knowns about
@@ -78,6 +127,29 @@ def main():
     if query is None:
         print(f'Failed to find \'{file_query}\'.')
         exit(1)
+    copy = np.copy(query)
+    copy = np.where(copy[:,:,:] == query[0,0,:], 0, copy)
+    cv.waitKey(0)
+    b_vals = []
+    g_vals = []
+    r_vals = []
+
+    for i in range(copy.shape[0]):
+        for j in range(copy.shape[1]):
+            if copy[i,j].any() > 0:
+                b_vals.append(copy[i,j,0])
+                g_vals.append(copy[i,j,1])
+                r_vals.append(copy[i,j,2])
+
+    b_vals = sorted(b_vals)
+    g_vals = sorted(g_vals)
+    r_vals = sorted(r_vals)
+
+    b_med = b_vals[int(len(b_vals)//2)]
+    g_med = g_vals[int(len(g_vals)//2)]
+    r_med = r_vals[int(len(r_vals)//2)]
+
+    query_med = (b_med, g_med, r_med)
     
     file_train = input('Filename of the train image: ')
 
@@ -86,6 +158,8 @@ def main():
     if train is None:
         print(f'Failed to find \'{file_train}\'.')
         exit(1)
+    
+    train = resize(train)
 
     count = 0
     for k in range(len(class_names)-1):
@@ -116,6 +190,8 @@ def main():
     # load photograph
     img = load_img(f'images/{file_train}')
 
+    img = img.resize((train.shape[1], train.shape[0]))
+
     if img is None:
         print(f'Failed to find \'{file_train}\'.')
         exit(1)
@@ -145,19 +221,19 @@ def main():
     objs = []
     orb = cv.ORB_create()
     bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+    print(f"Blue: {b_med}, Green: {g_med}, Red: {r_med}")
     for j in indices:
         y0, x0, y1, x1 = r['rois'][j]
         cv.imshow('Portion', train[y0:y1, x0:x1])
         cv.waitKey(0)
         roi = (y0, x0, y1, x1)
-        if is_object(query, train, roi, num=10, thresh=40, orb=orb, bf=bf):
-            mask = r['masks'][:,:,j]
-            masked = apply_mask(train, mask)
-            objs.append(masked)
-        """
         mask = r['masks'][:,:,j]
         masked = apply_mask(train, mask)
-        """
+        cv.imshow('mask', masked)
+        cv.waitKey(0)
+        if is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=orb, bf=bf):
+            objs.append(masked)
+
     if len(objs) > 0:
         comb = objs[0]
     else:
