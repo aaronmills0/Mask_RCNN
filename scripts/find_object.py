@@ -16,7 +16,6 @@ def apply_mask(img, mask):
 
 def is_object(query, train, roi, num=10, thresh=40, orb=None, bf=None):
      img = train[roi[0]:roi[2], roi[1]:roi[3]]
-     cv.imshow('roi', img)
      if orb == None:
           orb = cv.ORB_create()
      
@@ -78,7 +77,7 @@ if __name__ == '__main__':
      # load coco model weights
      rcnn.load_weights('mask_rcnn_coco.h5', by_name=True)
      # load photograph
-     img = load_img('images/mustard_bottles.jpg')
+     img = load_img('images/mustard_train_47.jpg')
      img = img_to_array(img)
      # make prediction
      results = rcnn.detect([img], verbose=0)
@@ -86,7 +85,7 @@ if __name__ == '__main__':
      r = results[0]
      
      query = cv.imread('images/mustard-reference.png')
-     train = cv.imread('images/mustard_bottles.jpg')
+     train = cv.imread('images/mustard_train_47.jpg')
 
      locator = Locator()
      
