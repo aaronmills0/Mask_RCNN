@@ -75,7 +75,7 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
         g_med = g_vals[int(len(g_vals)//2)]
         r_med = r_vals[int(len(r_vals)//2)]
 
-        # Perform BM-Transform
+        # Perform BM-Normalization
 
         diff = query_med[0]-b_med
 
@@ -219,6 +219,7 @@ def main():
     
     # Apply the mask for objects
     objs = []
+    found = []
     orb = cv.ORB_create()
     bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
     print(f"Blue: {b_med}, Green: {g_med}, Red: {r_med}")
@@ -233,6 +234,16 @@ def main():
         cv.waitKey(0)
         if is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=orb, bf=bf):
             objs.append(masked)
+            # Save indices of objects identified as the reference object
+            found.append(j)
+    all_objs = []
+    for k in range(len(r['rois'])):
+        if class_names[r['class_ids'][k]] != 'dining table':
+            y0, x0, y1, x1 = r['rois'][k]
+            roi = (y0, x0, y1, x1)
+            mask = r['masks'][:,:,k]
+            masked = apply_mask(train, mask)
+            all_objs.append(masked)
 
     if len(objs) > 0:
         comb = objs[0]
@@ -245,7 +256,21 @@ def main():
 
     cont = np.zeros((comb.shape[0], comb.shape[1], 3), dtype=np.uint8)
 
-    contours, heirarchy = cv.findContours(comb, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv.findContours(comb, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+    for i in found:
+        blank = np.zeros((train.shape[0], train.shape[1], 3), dtype=np.uint8)
+        y0, x0, y1, x1 = r['rois'][i]
+        blank[y0:y1, x0:x1] = train[y0:y1, x0:x1]
+        mask = r['masks'][:,:,i]
+        masked = apply_mask(train, mask) 
+        for j in range(len(all_objs)):
+            if not np.array_equal(masked, all_objs[j]):
+                white = np.where(all_objs[j]==255)
+                blank[white[0],white[1],:] = [255, 0, 0]
+                train[y0:y1, x0:x1] = blank[y0:y1, x0:x1]
+        cv.imshow('blank', blank)
+
 
     res = cv.drawContours(train, contours, -1, (0, 0, 255), 10)
 
