@@ -44,11 +44,9 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
     kp1, des1 = orb.detectAndCompute(query, None)
     kp2, des2 = orb.detectAndCompute(img, None)
 
-    print(des1)
-    print(des2)
-
     if des1 is None:
         return False
+
     if des2 is None:
         return False
 
@@ -60,13 +58,7 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
     matches = bf.match(des1, des2)
 
     matches = sorted(matches, key = lambda x:x.distance)
-
-    print("===============================")
-    for i in range(len(matches)):
-        print(f"{matches[i].distance} ", end="")
-    print("\n===============================")
      
-
     # Compute the average distance of the best num matches (lower is better).
     s = 0
     for j in matches[:num]:
@@ -81,10 +73,6 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
         r_vals = []
         # Obtain the section of the train image that the mask considers to be the object. Set the rest of the image to be black.
         blank = np.where(masked>0, blank, 0)
-    
-        cv.imshow('blank', blank)
-
-        cv.waitKey(0)
 
         # Iterate through each pixel.
         for i in range(blank.shape[0]):
@@ -114,8 +102,6 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
         g_med += int(diff)
 
         r_med +=  int(diff)
-
-        print(f"Train -> Blue: {b_med}, Green: {g_med}, Red: {r_med}")
 
         # For each colour channel check if the median colour value of the object in the roi is close to that of the query image.
 
@@ -265,18 +251,13 @@ def main():
 
     orb = cv.ORB_create()
     bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-    print(f"Blue: {b_med}, Green: {g_med}, Red: {r_med}")
 
     # Iterate through each object that Mask rcnn considers to be in the provided categories.
     for j in indices:
         y0, x0, y1, x1 = r['rois'][j]
-        cv.imshow('Portion', train[y0:y1, x0:x1])
-        cv.waitKey(0)
         roi = (y0, x0, y1, x1)
         mask = r['masks'][:,:,j] # Obtain the mask.
         masked = apply_mask(train, mask) # Obtain a binarized image according to the mask.
-        cv.imshow('mask', masked)
-        cv.waitKey(0)
         
         # Check if the found object matches our query object.
         if is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=orb, bf=bf):
@@ -324,17 +305,10 @@ def main():
                 white = np.where(all_objs[j]==255)
                 blank[white[0],white[1],:] = [255, 0, 0]
                 train[y0:y1, x0:x1] = blank[y0:y1, x0:x1]
-        cv.imshow('blank', blank)
 
     res = cv.drawContours(train, contours, -1, (0, 0, 255), 10) # Draw the contours.
 
-    plt.imshow(cv.cvtColor(res, cv.COLOR_BGR2RGB))
-
-    for j in r['class_ids']:
-        print(class_names[j])
-
-    display_instances(img, r['rois'], r['masks'], r['class_ids'], class_names, r['scores'])
-
+    cv.imshow('res', res)
     cv.waitKey(0)
 
 # Python main check
