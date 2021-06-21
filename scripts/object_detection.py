@@ -107,7 +107,7 @@ def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh
 
         # Perform BM-Normalization
 
-        diff = int(query_med[0]-b_med)
+        diff = int(query_med[0])-int(b_med)
 
         b_med += int(diff)
 
