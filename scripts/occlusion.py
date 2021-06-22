@@ -33,40 +33,49 @@ def apply_mask(img, mask):
     return blank # Return the binarized image.
 
 # Given a query image and an roi from the train image determine if the object in the reference image is in the roi (returns a boolean).
-def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=None, bf=None):
+def is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=None, bf=None, features=True, colours=True):
     img = train[roi[0]:roi[2], roi[1]:roi[3]] # obtain the roi
 
-    # If we have not passed an orb detector create one.
-    if orb is None: 
-        orb = cv.ORB_create()
-     
-    # Obtain key points and descriptors for both the reference image and the roi.
-    kp1, des1 = orb.detectAndCompute(query, None)
-    kp2, des2 = orb.detectAndCompute(img, None)
+    if not features and not colours:
+        return True
 
-    if des1 is None:
-        return False
+    if features:
+        # If we have not passed an orb detector create one.
+        if orb is None: 
+            orb = cv.ORB_create()
+        
+        # Obtain key points and descriptors for both the reference image and the roi.
+        kp1, des1 = orb.detectAndCompute(query, None)
+        kp2, des2 = orb.detectAndCompute(img, None)
 
-    if des2 is None:
-        return False
+        if des1 is None:
+            return False
 
-    # If we have not passed a bf matcher create one.
-    if bf is None:
-        bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-     
-    # Obtain matches.
-    matches = bf.match(des1, des2)
+        if des2 is None:
+            return False
 
-    matches = sorted(matches, key = lambda x:x.distance)
-     
-    # Compute the average distance of the best num matches (lower is better).
-    s = 0
-    for j in matches[:num]:
-        s += j.distance
-    s = s/num
+        # If we have not passed a bf matcher create one.
+        if bf is None:
+            bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+        
+        # Obtain matches.
+        matches = bf.match(des1, des2)
 
-    # If we consider the average to be sufficiently small.
-    if s <= thresh:
+        matches = sorted(matches, key = lambda x:x.distance)
+        
+        # Compute the average distance of the best num matches (lower is better).
+        s = 0
+        for j in matches[:num]:
+            s += j.distance
+        s = s/num
+
+        # If we consider the average to be too large.
+        if s > thresh:
+            return False
+        elif not colours:
+            return True
+
+    if colours:
         blank = np.copy(train) # deep copy of the train image.
         b_vals = []
         g_vals = []
@@ -207,6 +216,60 @@ def main():
                 categories.append(cat)
     if len(categories) == 0:
         all_types = True
+
+    # Allow user to not consider feature matching and/or colour matching.
+
+    features = str(input('Would you like to consider feature matching? [y/n]: ')).lower()
+
+    if features == 'y':
+        features = True
+    else:
+        features = False
+
+    colours = str(input('Would you like to consider colour matching? [y/n]: ')).lower()
+
+    if colours == 'y':
+        colours = True
+    else:
+        colours = False
+    
+    # Allow user to set the parameters for the is_object method.
+
+    deviation = 35
+    num = 10
+    thresh = 40
+    response = str(input('Would you like to set parameters? [y/n]: ')).lower()
+    if response == 'y':
+        print('An empty line retains the default value shown in parenthesis.')
+        if features:
+            while True:
+                n = input(f'Number of matches to consider ({num}): ')
+                if n == '':
+                    break
+                try:
+                    num = int(n)
+                    break
+                except:
+                    print('Please input a valid integer.')
+            while True:
+                thr = input(f'Threshold for a satisfactory match ({thresh}): ')
+                if thr == '':
+                    break
+                try:
+                    thresh = int(thr)
+                    break
+                except:
+                    print('Please input a valid integer.')
+        if colours:
+            while True:
+                dev = input(f'Colour deviation ({deviation}): ')
+                if dev == '':
+                    break
+                try:
+                    deviation = int(dev)
+                    break
+                except:
+                    print('Please input a valid integer.')
      
     # define the model
     rcnn = MaskRCNN(mode='inference', model_dir='./', config=TestConfig())
@@ -260,7 +323,7 @@ def main():
         masked = apply_mask(train, mask) # Obtain a binarized image according to the mask.
         
         # Check if the found object matches our query object.
-        if is_object(query, train, roi, query_med, masked, deviation=35, num=10, thresh=40, orb=orb, bf=bf):
+        if is_object(query, train, roi, query_med, masked, deviation=deviation, num=num, thresh=thresh, orb=orb, bf=bf, features=features, colours=colours):
             # Save the binarized image of all objects indentified as the query object.
             objs.append(masked)
             # Save indices of objects identified as the query object.
